@@ -39,5 +39,72 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
+    /* 
+    * ++INSTRUCTION++ [15]
+    * instruction[15]:  0 ~> A-instruction (just assign value to A register)
+    *                   1 ~> C-instruction (there is computation)     
+    * ++COMPUTATION++ [6..12]
+    * instruction[12]:  0 ~> Use A register in computation
+    *                   1 ~> Use M register in computation
+    * instruction[6..11]: computation flags for ALU (zx, nx... etc)
+    * ++DESTINATION++ [3..5]
+    * instruction[3]: 1 ~> write to M Register
+    *                 0 ~> Do NOT write to M Register
+    * instruction[4]: 1 ~> write to D Register
+    *                 0 ~> Do NOT write to D Register
+    * instruction[5]: 1 ~> write to A Register
+    *                 0 ~> Do NOT write to A Register
+    * ++JUMP++ [0..2]
+    * instruction[2]: 1 ~> LESS than Zero
+    * instruction[1]: 1 ~> EQUAL to Zero
+    * insruction[0]: 1 ~> GREATER than Zero
+    */
+
+    // Check A or C instruction
+    Mux16(a=instruction, b=outALU, sel=instruction[15], out=outinstr);
+    And(a=true, b=instruction[15], out=compute);
+    Not(in=instruction[15], out=notinstr);
+    And(a=true, b=notinstr, out=assign);
+
+    // ====A Register====
+    // When C-instruction and destination[A] == 1
+    And(a=compute, b=instruction[5], out=writeA);
+    // When A-instruction
+    Or(a=writeA, b=assign, out=loadA);
+    // Write to A Register
+    ARegister(in=outinstr, load=loadA, out[0..14]=addressM, out=registerA);
+
+    // Use A or M in computation
+    Mux16(a=registerA, b=inM, sel=instruction[12], out=outAM);
+
+    // D Register
+    And(a=compute, b=instruction[4], out=loadD);
+    DRegister(in=outALU, load=loadD, out=registerD);
+
+    // Computation
+    ALU(x=registerD, y=outAM, zx=instruction[11], nx=instruction[10], zy=instruction[9], ny=instruction[8], f=instruction[7], no=instruction[6], out=outM, out=outALU, zr=ALUzr, ng=ALUng);
+
+    // writeM
+    And(a=compute, b=instruction[3], out=writeM);
+
+    // Check positive number
+    And(a=ALUzr, b=true, out=isZero);
+    And(a=ALUng, b=true, out=isNeg);
+    Not(in=isZero, out=notzr);
+    Not(in=isNeg, out=notng);
+    And(a=notzr, b=true, out=isNotZero);
+    And(a=notng, b=true, out=isNotNeg);
+    And(a=isNotZero, b=isNotNeg, out=isPositive);
+
+    // Jump Check
+    And(a=isPositive, b=instruction[0], out=jumpgt); // Greater than Zero
+    And(a=ALUzr, b=instruction[1], out=jumpzr); // Zero
+    And(a=ALUng, b=instruction[2], out=jumpng); // Neg
+
+    Or(a=jumpzr, b=jumpng, out=jump);
+    Or(a=jump, b=jumpgt, out=jump2);
+    And(a=compute, b=jump2, out=jump3);
+
+    // Program Counter
+    PC(in=registerA, load=jump3, inc=true, reset=reset, out[0..14]=pc);
 }
