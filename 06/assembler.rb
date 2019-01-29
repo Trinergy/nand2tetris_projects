@@ -53,6 +53,32 @@ JUMP_TABLE = {
     "JMP" => "111"
 }
 
+$symbol_table = {
+    "R0" => "0",
+    "R1" => "1",
+    "R2" => "2",
+    "R3" => "3",
+    "R4" => "4",
+    "R5" => "5",
+    "R6" => "6",
+    "R7" => "7",
+    "R8" => "8",
+    "R9" => "9",
+    "R10" => "10",
+    "R11" => "11",
+    "R12" => "12",
+    "R13" => "13",
+    "R14" => "14",
+    "R15" => "15",
+    "SCREEN" => "16384",
+    "KBD" => "24576",
+    "SP" => "0",
+    "LCL" => "1",
+    "ARG" => "2",
+    "THIS" => "3",
+    "THAT" => "4"
+}
+
 class Parser
     attr_reader :line
 
@@ -65,19 +91,29 @@ class Parser
         print_c
     end
 
-    private
-
     def a_instruction?
         line.include?('@')
     end
 
-    def c_instruction?
-        line.include?('=') || line.include?(';')
+    def j_instruction?
+        line.chars.first == '(' && line.chars.last == ')'
     end
 
+    def loop(string)
+        /\(([^()]+)\)/.match(string)[1]
+    end
+
+    def a_value(string)
+        string.gsub("@", '')
+    end
+
+    private
+
     def print_a
-        a = line.gsub("@", '')
-        "0" + sprintf("%015b", a.to_i)
+        a = a_value(line)
+        value = $symbol_table[a].nil? ? a : $symbol_table[a]
+
+        "0" + sprintf("%015b", value.to_i)
     end
 
     def print_c
@@ -112,8 +148,10 @@ class Cleaner
     def self.call(filepath)
         text = []
         File.readlines(filepath).each do |line|
-            formatted_line = line.gsub!("\n",'')
-            stripped_line = formatted_line.split('//')[0].to_s
+            line.gsub!("\n",'')
+            line.gsub!(' ','')
+            stripped_line = line.split('//')[0].to_s
+
             text << stripped_line if !stripped_line.empty?
         end
         text
@@ -131,9 +169,20 @@ puts cleaned_text
 puts filename
 puts output_filename
 
-cleaned_text.each do |line|
+# Add commands to symbol table
+cleaned_text.each_with_index.map do |line, i|
     p = Parser.new(line)
-    puts p.pretty_print
+    text = p.a_value(line)
+
+    if p.j_instruction?
+        text = p.loop(line)
+        $symbol_table[text] = i
+        cleaned_text.delete_at(i)
+    end
+
+    if p.a_instruction? && text.scan(/\d/).empty? && !$symbol_table.include?(text)
+        $symbol_table[text] = 16 + i
+    end
 end
 
 File.open(output_filename, 'w') do |file| 
