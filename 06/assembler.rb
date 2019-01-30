@@ -1,4 +1,8 @@
-require 'pry'
+# This assembler was a hack job that ended up being incomplete
+# It can translate non-symbol assembly into machine language
+# TODO: Break file down into individual components
+#       Wrap less obvious operations with method names that show clear intention
+# BUG: Can not handle consecutive jump instruction lines -> Make the list of lines immutable
 
 C_TABLE = {
     "0" => "0101010",
